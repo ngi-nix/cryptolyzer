@@ -2,17 +2,22 @@
   description = "(insert short project description here)";
 
   # Nixpkgs / NixOS version to use.
-  inputs.nixpkgs.url = "nixpkgs/nixos-20.09";
+  inputs.nixpkgs.url = "nixpkgs/nixos-22.05";
 
   # Upstream source tree(s).
-  inputs.hello-src = { url = git+https://git.savannah.gnu.org/git/hello.git; flake = false; };
-  inputs.gnulib-src = { url = git+https://git.savannah.gnu.org/git/gnulib.git; flake = false; };
 
-  outputs = { self, nixpkgs, hello-src, gnulib-src }:
+  inputs.cryptoparser-src = {
+    url = github:/c0r0n3r/cryptoparser;
+    flake = false;
+  };
+
+  inputs.cryptolyzer-src = {
+    url = github:/c0r0n3r/cryptolyzer;
+    flake = false;
+  };
+
+  outputs = { self, nixpkgs, ... }@inputs:
     let
-
-      # Generate a user-friendly version numer.
-      version = builtins.substring 0 8 hello-src.lastModifiedDate;
 
       # System types to support.
       supportedSystems = [ "x86_64-linux" ];
@@ -30,91 +35,71 @@
       # A Nixpkgs overlay.
       overlay = final: prev: {
 
-        hello = with final; stdenv.mkDerivation rec {
-          name = "hello-${version}";
+        cryptolyzer = with final; python3.pkgs.buildPythonPackage rec {
 
-          src = hello-src;
+          name = "cryptolyzer";
 
-          buildInputs = [ autoconf automake gettext gnulib perl gperf texinfo help2man ];
+          src = inputs.cryptolyzer-src;
 
-          preConfigure = ''
-            mkdir -p .git # force BUILD_FROM_GIT
-            ./bootstrap --gnulib-srcdir=${gnulib-src} --no-git --skip-po
-          '';
+          buildInputs = with python3Packages; [ 
+                          python-dateutil 
+                          requests
+                          six
+                          urllib3
+                          attrs
+                          certvalidator
+                          cryptoparser ];
 
-          meta = {
-            homepage = "https://www.gnu.org/software/hello/";
-            description = "A program to show a familiar, friendly greeting";
+          pythonImportsCheck = [ "cryptolyzer" ];                          
+          
+          doCheck = false;
+
+          meta = with lib; {
+            homepage = "https://github.com/c0r0n3r/cryptolyzer";
+            description = "CryptoLyzer is a fast and flexible server cryptographic settings analyzer library for Python";
+            license = licenses.mpl20;
           };
+        
         };
 
+        cryptoparser = with final; python3.pkgs.buildPythonPackage rec {
+
+          pname = "cryptoparser";
+          
+          version = "";
+          
+          src = inputs.cryptoparser-src;
+          
+          buildInputs =  with python3Packages; [
+            asn1crypto
+            attrs
+            python-dateutil
+            six
+          ];
+          
+          pythonImportsCheck = [ "cryptoparser" ];
+          
+          doCheck = true;
+          
+          meta = with lib; {
+            description = " A cryptographic protocol parser";
+            homepage = https://github.com/c0r0n3r/cryptoparser;
+            license = licenses.mpl20;
+          };
+
+        };
       };
 
       # Provide some binary packages for selected system types.
       packages = forAllSystems (system:
         {
-          inherit (nixpkgsFor.${system}) hello;
+          inherit (nixpkgsFor.${system}) cryptolyzer;
         });
 
       # The default package for 'nix build'. This makes sense if the
       # flake provides only one package or there is a clear "main"
       # package.
-      defaultPackage = forAllSystems (system: self.packages.${system}.hello);
-
-      # A NixOS module, if applicable (e.g. if the package provides a system service).
-      nixosModules.hello =
-        { pkgs, ... }:
-        {
-          nixpkgs.overlays = [ self.overlay ];
-
-          environment.systemPackages = [ pkgs.hello ];
-
-          #systemd.services = { ... };
-        };
-
-      # Tests run by 'nix flake check' and by Hydra.
-      checks = forAllSystems (system: {
-        inherit (self.packages.${system}) hello;
-
-        # Additional tests, if applicable.
-        test =
-          with nixpkgsFor.${system};
-          stdenv.mkDerivation {
-            name = "hello-test-${version}";
-
-            buildInputs = [ hello ];
-
-            unpackPhase = "true";
-
-            buildPhase = ''
-              echo 'running some integration tests'
-              [[ $(hello) = 'Hello, world!' ]]
-            '';
-
-            installPhase = "mkdir -p $out";
-          };
-
-        # A VM test of the NixOS module.
-        vmTest =
-          with import (nixpkgs + "/nixos/lib/testing-python.nix") {
-            inherit system;
-          };
-
-          makeTest {
-            nodes = {
-              client = { ... }: {
-                imports = [ self.nixosModules.hello ];
-              };
-            };
-
-            testScript =
-              ''
-                start_all()
-                client.wait_for_unit("multi-user.target")
-                client.succeed("hello")
-              '';
-          };
-      });
+      defaultPackage = forAllSystems (system: self.packages.${system}.cryptolyzer);
 
     };
 }
