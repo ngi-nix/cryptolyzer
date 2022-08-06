@@ -1,5 +1,5 @@
 {
-  description = "(insert short project description here)";
+  description = "CryptoLyzer is a fast and flexible server cryptographic settings analyzer library for Python";
 
   # Nixpkgs / NixOS version to use.
   inputs.nixpkgs.url = "nixpkgs/nixos-22.05";
